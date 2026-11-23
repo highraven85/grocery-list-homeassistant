@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import override
+from typing import Any, override
 
 from homeassistant.components.todo import (
     TodoItem,
@@ -25,6 +25,8 @@ from .api import (
 from .const import (
     API_STATUS_COMPLETED,
     API_STATUS_NEEDS_ACTION,
+    ATTR_DEPARTMENT_ORDER,
+    ATTR_ITEM_DEPARTMENTS,
     DEFAULT_NAME,
     DOMAIN,
     ENTITY_ID,
@@ -74,6 +76,9 @@ class GroceryAppTodoListEntity(
         | TodoListEntityFeature.DELETE_TODO_ITEM
     )
 
+    # Card helpers that change with every list edit; keep them out of history.
+    _unrecorded_attributes = frozenset({ATTR_DEPARTMENT_ORDER, ATTR_ITEM_DEPARTMENTS})
+
     def __init__(self, coordinator: GroceryAppCoordinator) -> None:
         """Create the single Grocery App list."""
         super().__init__(coordinator)
@@ -99,6 +104,23 @@ class GroceryAppTodoListEntity(
             )
             for item in data.items
         ]
+
+    @property
+    @override
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Expose departments for the Grocery App card, when the app sends them."""
+        data = self.coordinator.data
+        if data is None:
+            return None
+        item_departments = {
+            item.id: item.department for item in data.items if item.department
+        }
+        if not item_departments and not data.departments:
+            return None
+        return {
+            ATTR_DEPARTMENT_ORDER: list(data.departments),
+            ATTR_ITEM_DEPARTMENTS: item_departments,
+        }
 
     @callback
     @override

@@ -13,7 +13,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
-from .api import GroceryAppError, PlannedMeal
+from .api import GroceryAppError, MealRecipe, PlannedMeal
 from .const import DINNER_MEAL, DINNERS_ENTITY_ID, DINNERS_NAME, DINNERS_UNIQUE_ID
 from .coordinator import GroceryAppConfigEntry, GroceryAppMealsCoordinator
 
@@ -22,25 +22,28 @@ _LOGGER = logging.getLogger(__name__)
 SUMMARY_SEPARATOR = " + "
 
 
-def dinner_events(meals: Iterable[PlannedMeal]) -> list[CalendarEvent]:
-    """Build one all-day event per day that has dinner recipes.
+def dinners_by_day(meals: Iterable[PlannedMeal]) -> dict[date, list[MealRecipe]]:
+    """Group dinner recipes by day, in date order.
 
     Other meal slots and days without recipes are skipped. Two dinner entries
     for the same day are merged, keeping recipe order and dropping duplicates.
     """
-    by_day: dict[date, list[str]] = {}
+    by_day: dict[date, list[MealRecipe]] = {}
     for meal in meals:
         if meal.meal.casefold() != DINNER_MEAL:
             continue
-        names = by_day.setdefault(meal.date, [])
+        recipes = by_day.setdefault(meal.date, [])
         for recipe in meal.recipes:
-            if recipe.name not in names:
-                names.append(recipe.name)
+            if all(recipe.name != known.name for known in recipes):
+                recipes.append(recipe)
+    return {day: by_day[day] for day in sorted(by_day) if by_day[day]}
+
+
+def dinner_events(meals: Iterable[PlannedMeal]) -> list[CalendarEvent]:
+    """Build one all-day event per day that has dinner recipes."""
     events = []
-    for day in sorted(by_day):
-        names = by_day[day]
-        if not names:
-            continue
+    for day, recipes in dinners_by_day(meals).items():
+        names = [recipe.name for recipe in recipes]
         events.append(
             CalendarEvent(
                 start=day,

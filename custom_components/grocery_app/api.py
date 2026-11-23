@@ -17,7 +17,7 @@ from urllib.parse import quote
 from aiohttp import ClientError, ClientSession, ClientTimeout
 from yarl import URL
 
-from .const import API_STATUSES, MEALS_MAX_DAYS
+from .const import API_STATUSES, MEALS_MAX_DAYS, PHOTO_CACHE_LIMIT, PHOTO_MAX_BYTES
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -92,6 +92,7 @@ class GroceryItem:
     name: str
     status: str
     description: str | None = None
+    department: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -118,6 +119,7 @@ class GroceryList:
 
     name: str
     items: tuple[GroceryItem, ...]
+    departments: tuple[str, ...] = ()
 
 
 def normalize_base_url(value: str) -> str:
@@ -178,7 +180,16 @@ def _parse_item(raw: Any, index: int) -> GroceryItem | None:
         name=name.strip(),
         status=status,
         description=description,
+        department=_clean_text(raw.get("department")),
     )
+
+
+def _clean_text(value: Any, limit: int = 80) -> str | None:
+    """Return a short, stripped string, or None."""
+    if not isinstance(value, str):
+        return None
+    cleaned = " ".join(value.split())[:limit]
+    return cleaned or None
 
 
 def _parse_recipe(raw: Any) -> MealRecipe | None:
@@ -251,6 +262,9 @@ class GroceryAppClient:
         self._app_token = app_token
         self._retry_delays = retry_delays
         self._timeout = timeout
+        # recipe id -> photo URL from the most recent meals responses. The photo
+        # proxy only fetches URLs found here, never a URL a caller supplies.
+        self._photo_urls: dict[str, str] = {}
 
     def __repr__(self) -> str:
         """Return a representation that omits the URL and credentials."""
@@ -397,7 +411,14 @@ class GroceryAppClient:
             for index, raw in enumerate(payload["items"])
             if (item := _parse_item(raw, index)) is not None
         )
-        return GroceryList(name=list_name, items=items)
+        raw_departments = payload.get("departments")
+        departments: list[str] = []
+        if isinstance(raw_departments, list):
+            for raw in raw_departments:
+                department = _clean_text(raw)
+                if department and department not in departments:
+                    departments.append(department)
+        return GroceryList(name=list_name, items=items, departments=tuple(departments))
 
     async def async_add_item(self, name: str) -> Any:
         """Add an item and return the response payload, when one was sent."""
@@ -486,4 +507,79 @@ class GroceryAppClient:
                 if (meal := _parse_meal(raw, index)) is not None
             )
             chunk_start = chunk_end + timedelta(days=1)
+        self._remember_photos(meals)
         return meals
+
+    def _remember_photos(self, meals: list[PlannedMeal]) -> None:
+        """Record recipe photo URLs that belong to this grocery app."""
+        for meal in meals:
+            for recipe in meal.recipes:
+                if recipe.photo_url and self._is_media_url(recipe.photo_url):
+                    self._photo_urls.pop(recipe.id, None)
+                    self._photo_urls[recipe.id] = recipe.photo_url
+        while len(self._photo_urls) > PHOTO_CACHE_LIMIT:
+            self._photo_urls.pop(next(iter(self._photo_urls)))
+
+    def has_photo(self, recipe_id: str) -> bool:
+        """Return True when a photo URL is known for the recipe."""
+        return recipe_id in self._photo_urls
+
+    def _is_media_url(self, value: str) -> bool:
+        """Accept only same-origin URLs under the app's /api/ha/media/ path."""
+        try:
+            url = URL(value)
+            base = URL(self._base_url)
+        except ValueError:
+            return False
+        prefix = base.path.rstrip("/") + "/api/ha/media/"
+        return (
+            url.scheme == base.scheme
+            and url.host == base.host
+            and url.port == base.port
+            and url.user is None
+            and url.password is None
+            and not url.query_string
+            and not url.fragment
+            and url.path.startswith(prefix)
+            and ".." not in url.path
+        )
+
+    async def async_get_recipe_photo(self, recipe_id: str) -> tuple[bytes, str]:
+        """Fetch a recipe photo with the app credentials.
+
+        Only photo URLs that came from a meals response are fetched.
+        """
+        url = self._photo_urls.get(recipe_id)
+        if url is None:
+            raise GroceryAppApiError(404, "GET", "/api/ha/media")
+        try:
+            async with self._session.get(
+                url,
+                headers=self._headers() | {HEADER_ACCEPT: "image/*"},
+                timeout=ClientTimeout(total=self._timeout),
+                allow_redirects=False,
+            ) as response:
+                status = response.status
+                content_type = response.content_type or ""
+                if status in _AUTH_STATUSES or 300 <= status < 400:
+                    raise GroceryAppAuthError(status)
+                if status >= 400:
+                    raise GroceryAppApiError(status, "GET", "/api/ha/media")
+                if not content_type.startswith("image/"):
+                    raise GroceryAppResponseError
+                declared = response.headers.get("Content-Length", "")
+                if declared.isdigit() and int(declared) > PHOTO_MAX_BYTES:
+                    raise GroceryAppResponseError
+                chunks: list[bytes] = []
+                size = 0
+                # Read to the end; a single read() can stop at a buffer boundary.
+                async for chunk in response.content.iter_chunked(64 * 1024):
+                    size += len(chunk)
+                    if size > PHOTO_MAX_BYTES:
+                        _LOGGER.warning("Grocery App recipe photo was too large")
+                        raise GroceryAppResponseError
+                    chunks.append(chunk)
+        except (ClientError, TimeoutError) as err:
+            _LOGGER.warning("Grocery App could not load a recipe photo")
+            raise GroceryAppConnectionError from err
+        return b"".join(chunks), content_type
