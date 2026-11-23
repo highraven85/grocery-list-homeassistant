@@ -19,7 +19,7 @@ from .coordinator import GroceryAppConfigEntry, GroceryAppCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS: list[Platform] = [Platform.TODO]
+PLATFORMS: list[Platform] = [Platform.CALENDAR, Platform.TODO]
 
 __all__ = ["DOMAIN", "async_setup_entry", "async_unload_entry"]
 
