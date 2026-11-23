@@ -54,6 +54,7 @@ The integration calls these paths under the configured base URL:
 - `POST /api/ha/todo/items` with `{ "name": "..." }` adds an item
 - `PATCH /api/ha/todo/items/{id}` with optional `name` and `status` renames, completes, or reopens an item
 - `DELETE /api/ha/todo/items/{id}` removes an item
+- `GET /api/ha/media/r/{file}` returns a recipe photo listed in a meals response (used by the photo proxy)
 - `GET /api/ha/meals?start=YYYY-MM-DD&end=YYYY-MM-DD` returns planned meals (dates inclusive, at most 62 days per request; longer ranges are split)
 
 `status` is `needs_action` or `completed`. `GET /api/ha/todo` looks like this:
@@ -94,7 +95,24 @@ Requests send `CF-Access-Client-Id`, `CF-Access-Client-Secret`, and `Authorizati
 
 Diagnostics downloaded from **Settings → Devices & services** redact the base URL and the credentials.
 
+## Grocery App card
+
+The integration ships a Lovelace card, `custom:grocery-app-card`, and loads it on every dashboard automatically (no resource to add). It shows the shopping list grouped by department, with tap-to-check and an add box, next to this week's dinners with recipe photos. On narrow screens the two halves stack.
+
+```yaml
+type: custom:grocery-app-card
+title: Grocery App              # optional
+todo_entity: todo.grocery_app   # optional, default shown
+calendar_entity: calendar.grocery_dinners  # optional, used only as a fallback
+```
+
+It works best as the only card in a **Panel** view. The card uses only Home Assistant: the to-do actions, the `grocery_app/dinners` websocket command, and the recipe photo proxy at `/api/grocery_app/recipe_photo/{recipe_id}`, which needs a signed-in Home Assistant user. The app credentials never reach the browser.
+
+Departments come from the optional `department` field on each item and the optional top-level `departments` order in `GET /api/ha/todo`. Without them the card shows one "To buy" group. They are exposed on `todo.grocery_app` as the `department_order` and `item_departments` attributes, which are not recorded in history.
+
 ## Changelog
+
+- **1.2.0**: Adds the bundled `grocery-app-card`, the `grocery_app/dinners` websocket command, the authenticated recipe photo proxy, and department attributes on `todo.grocery_app` when the app sends them.
 
 - **1.1.0**: Adds the `calendar.grocery_dinners` calendar for planned dinners from `GET /api/ha/meals`. If the meals endpoint fails, the calendar is unavailable and the to-do list keeps working.
 - **1.0.0**: First release with the `todo.grocery_app` shopping list.
