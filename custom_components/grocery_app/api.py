@@ -10,13 +10,14 @@ import json
 import logging
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import date, timedelta
 from typing import Any
 from urllib.parse import quote
 
 from aiohttp import ClientError, ClientSession, ClientTimeout
 from yarl import URL
 
-from .const import API_STATUSES
+from .const import API_STATUSES, MEALS_MAX_DAYS
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -94,6 +95,24 @@ class GroceryItem:
 
 
 @dataclass(frozen=True, slots=True)
+class MealRecipe:
+    """One recipe planned for a meal."""
+
+    id: str
+    name: str
+    photo_url: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class PlannedMeal:
+    """One meal slot on one day of the meal plan."""
+
+    date: date
+    meal: str
+    recipes: tuple[MealRecipe, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class GroceryList:
     """Shopping list returned by the grocery app."""
 
@@ -162,6 +181,50 @@ def _parse_item(raw: Any, index: int) -> GroceryItem | None:
     )
 
 
+def _parse_recipe(raw: Any) -> MealRecipe | None:
+    """Convert one recipe from a meal, or skip it when it has no name."""
+    if not isinstance(raw, dict):
+        return None
+    name = raw.get("name")
+    if not isinstance(name, str) or not name.strip():
+        return None
+    recipe_id = raw.get("id")
+    if isinstance(recipe_id, int) and not isinstance(recipe_id, bool):
+        recipe_id = str(recipe_id)
+    if not isinstance(recipe_id, str) or not recipe_id.strip():
+        recipe_id = name.strip()
+    photo_url = raw.get("photo_url")
+    if not isinstance(photo_url, str) or not photo_url.strip():
+        photo_url = None
+    return MealRecipe(id=recipe_id.strip(), name=name.strip(), photo_url=photo_url)
+
+
+def _parse_meal(raw: Any, index: int) -> PlannedMeal | None:
+    """Convert one planned meal, or skip it when the shape is unusable."""
+    if not isinstance(raw, dict):
+        _LOGGER.warning("Skipping planned meal %s because it is not an object", index)
+        return None
+    raw_date = raw.get("date")
+    meal = raw.get("meal")
+    recipes = raw.get("recipes")
+    try:
+        day = date.fromisoformat(raw_date) if isinstance(raw_date, str) else None
+    except ValueError:
+        day = None
+    if day is None:
+        _LOGGER.warning("Skipping planned meal %s because its date is invalid", index)
+        return None
+    if not isinstance(meal, str) or not meal.strip():
+        _LOGGER.warning("Skipping planned meal %s because it has no meal name", index)
+        return None
+    if not isinstance(recipes, list):
+        recipes = []
+    parsed = tuple(
+        recipe for raw_recipe in recipes if (recipe := _parse_recipe(raw_recipe))
+    )
+    return PlannedMeal(date=day, meal=meal.strip(), recipes=parsed)
+
+
 class GroceryAppClient:
     """Call the grocery app Home Assistant API."""
 
@@ -224,8 +287,13 @@ class GroceryAppClient:
         method: str,
         *parts: str,
         json_body: Mapping[str, Any] | None = None,
+        params: Mapping[str, str] | None = None,
     ) -> Any:
-        """Perform one API request and return decoded JSON, or None."""
+        """Perform one API request and return decoded JSON, or None.
+
+        ``params`` holds non-secret query values such as dates. Credentials are
+        never passed here; they stay in the headers.
+        """
         url = self._build_url(*parts)
         path = "/" + "/".join(parts)
         attempts = len(self._retry_delays) + 1
@@ -239,6 +307,8 @@ class GroceryAppClient:
                 }
                 if json_body is not None:
                     request_kwargs["json"] = dict(json_body)
+                if params is not None:
+                    request_kwargs["params"] = dict(params)
                 async with self._session.request(
                     method, url, **request_kwargs
                 ) as response:
@@ -380,3 +450,40 @@ class GroceryAppClient:
         if not item_id.strip():
             raise GroceryAppApiError(400, "DELETE", "/api/ha/todo/items")
         await self._request_json("DELETE", "api", "ha", "todo", "items", item_id)
+
+    async def async_get_meals(self, start: date, end: date) -> list[PlannedMeal]:
+        """Fetch planned meals from ``start`` to ``end``, both inclusive.
+
+        The API caps one request at MEALS_MAX_DAYS days, so longer ranges are
+        fetched in consecutive chunks.
+        """
+        if end < start:
+            return []
+        meals: list[PlannedMeal] = []
+        chunk_start = start
+        while chunk_start <= end:
+            chunk_end = min(end, chunk_start + timedelta(days=MEALS_MAX_DAYS - 1))
+            payload = await self._request_json(
+                "GET",
+                "api",
+                "ha",
+                "meals",
+                params={
+                    "start": chunk_start.isoformat(),
+                    "end": chunk_end.isoformat(),
+                },
+            )
+            if isinstance(payload, dict) and isinstance(payload.get("meals"), list):
+                payload = payload["meals"]
+            if not isinstance(payload, list):
+                _LOGGER.error(
+                    "Grocery App meals response was not in the expected shape"
+                )
+                raise GroceryAppResponseError
+            meals.extend(
+                meal
+                for index, raw in enumerate(payload)
+                if (meal := _parse_meal(raw, index)) is not None
+            )
+            chunk_start = chunk_end + timedelta(days=1)
+        return meals
