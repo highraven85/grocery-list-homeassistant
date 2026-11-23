@@ -33,6 +33,20 @@ MEALS_SCAN_INTERVAL: Final = timedelta(minutes=15)
 MEALS_LOOKAHEAD_DAYS: Final = 14
 # The meals endpoint accepts at most this many days per request.
 MEALS_MAX_DAYS: Final = 62
+# The card's meals websocket command accepts at most this many days.
+WS_MEALS_MAX_DAYS: Final = 92
+
+# Recipe photo proxy, served by Home Assistant with Home Assistant auth.
+PHOTO_URL_PREFIX: Final = "/api/grocery_app/recipe_photo"
+PHOTO_CACHE_LIMIT: Final = 500
+PHOTO_MAX_BYTES: Final = 5 * 1024 * 1024
+
+# Bundled Lovelace card.
+CARD_URL_BASE: Final = "/grocery_app_static"
+CARD_FILENAME: Final = "grocery-app-card.js"
+
+ATTR_DEPARTMENT_ORDER: Final = "department_order"
+ATTR_ITEM_DEPARTMENTS: Final = "item_departments"
 
 API_STATUS_NEEDS_ACTION: Final = "needs_action"
 API_STATUS_COMPLETED: Final = "completed"
