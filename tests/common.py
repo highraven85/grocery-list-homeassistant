@@ -33,6 +33,7 @@ TEST_ACCESS_CLIENT_SECRET = "client-secret"
 TEST_APP_TOKEN = "app-token"
 LIST_URL = f"{TEST_BASE_URL}/api/ha/todo"
 ITEMS_URL = f"{TEST_BASE_URL}/api/ha/todo/items"
+MEALS_URL = f"{TEST_BASE_URL}/api/ha/meals"
 
 
 def config_data(**overrides: Any) -> dict[str, Any]:
@@ -82,8 +83,19 @@ async def setup_integration(
     hass: HomeAssistant,
     aioclient_mock: AiohttpClientMocker,
     payload: dict[str, Any] | None = None,
+    meals: list[dict[str, Any]] | None = None,
+    meals_status: int | None = None,
 ) -> MockConfigEntry:
-    """Create a loaded Grocery App config entry against the mocked API."""
+    """Create a loaded Grocery App config entry against the mocked API.
+
+    ``meals`` or ``meals_status`` mocks ``GET /api/ha/meals`` for any range.
+    """
+    if meals is not None or meals_status is not None:
+        aioclient_mock.get(
+            MEALS_URL,
+            json=meals if meals is not None else {"error": "x"},
+            status=meals_status or 200,
+        )
     aioclient_mock.get(
         LIST_URL, json=payload if payload is not None else list_payload()
     )

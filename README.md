@@ -1,8 +1,10 @@
 # Grocery App
 
-Home Assistant custom integration that connects a grocery-list HTTP API to a to-do list entity.
+Home Assistant custom integration that connects a grocery-list HTTP API to a to-do list entity and a dinners calendar.
 
 The entity is `todo.grocery_app`, named **Grocery App**. Use the built-in to-do list card, and the built-in Assist to-do intents, to add, complete, and remove items. This is a custom integration. It is not a Home Assistant add-on, and it is not a REST sensor.
+
+The integration also adds `calendar.grocery_dinners`, named **Grocery Dinners**. It shows each day's planned dinner from the grocery app meal plan as an all-day event. The event title is the recipe names joined with ` + `, and the description lists the recipes. Breakfast, lunch, snacks, and days without recipes are left out. The calendar is on while tonight's dinner is planned, and its `message` attribute holds tonight's or the next planned dinner. Use the built-in calendar card to show it.
 
 This project is not an official Home Assistant product and it is not an official Cloudflare product.
 
@@ -29,7 +31,7 @@ Home Assistant must be able to reach the grocery app base URL.
 
 There is no YAML configuration. Credentials are entered only in this config flow and are stored in the Home Assistant config entry. They are sent as request headers and are never placed in the URL.
 
-Only one Grocery App entry is supported, so the to-do list stays on the entity id `todo.grocery_app`.
+Only one Grocery App entry is supported, so the to-do list stays on the entity id `todo.grocery_app` and the calendar on `calendar.grocery_dinners`.
 
 ## Configuration fields
 
@@ -42,7 +44,7 @@ Only one Grocery App entry is supported, so the to-do list stays on the entity i
 
 All three credentials are password fields. If authentication later fails, Home Assistant starts a reauthentication flow. The integration page can also reconfigure the base URL and credentials.
 
-The integration polls the list about every 30 seconds. Adding, completing, renaming, and removing items are sent when the to-do action runs.
+The integration polls the list about every 30 seconds and upcoming dinners (the next 14 days) about every 15 minutes. The calendar card loads the range it shows when it opens. Adding, completing, renaming, and removing items are sent when the to-do action runs.
 
 ## API
 
@@ -52,6 +54,7 @@ The integration calls these paths under the configured base URL:
 - `POST /api/ha/todo/items` with `{ "name": "..." }` adds an item
 - `PATCH /api/ha/todo/items/{id}` with optional `name` and `status` renames, completes, or reopens an item
 - `DELETE /api/ha/todo/items/{id}` removes an item
+- `GET /api/ha/meals?start=YYYY-MM-DD&end=YYYY-MM-DD` returns planned meals (dates inclusive, at most 62 days per request; longer ranges are split)
 
 `status` is `needs_action` or `completed`. `GET /api/ha/todo` looks like this:
 
@@ -69,6 +72,20 @@ The integration calls these paths under the configured base URL:
 }
 ```
 
+`GET /api/ha/meals` returns a list, one entry per day and meal slot:
+
+```json
+[
+  {
+    "date": "2026-11-23",
+    "meal": "dinner",
+    "recipes": [{ "id": "r1", "name": "Chicken Tacos", "photo_url": null }]
+  }
+]
+```
+
+Only entries whose `meal` is `dinner` (any letter case) become calendar events. Date and slot query values are the only data placed in a URL.
+
 `description` is optional. The Home Assistant entity name stays **Grocery App** even when the payload uses a different list name.
 
 Requests send `CF-Access-Client-Id`, `CF-Access-Client-Secret`, and `Authorization: Bearer`. A failed credential check is reported in the config flow and in the Home Assistant log without the credential values. Transient connection and server errors are retried.
@@ -76,6 +93,11 @@ Requests send `CF-Access-Client-Id`, `CF-Access-Client-Secret`, and `Authorizati
 ## Diagnostics
 
 Diagnostics downloaded from **Settings → Devices & services** redact the base URL and the credentials.
+
+## Changelog
+
+- **1.1.0**: Adds the `calendar.grocery_dinners` calendar for planned dinners from `GET /api/ha/meals`. If the meals endpoint fails, the calendar is unavailable and the to-do list keeps working.
+- **1.0.0**: First release with the `todo.grocery_app` shopping list.
 
 ## Development
 
