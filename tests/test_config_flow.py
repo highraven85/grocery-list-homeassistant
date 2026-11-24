@@ -152,14 +152,14 @@ async def test_successful_setup_creates_the_todo_entity(
     await hass.async_block_till_done()
 
     assert result["type"] == "create_entry"
-    assert result["title"] == "Grocery App"
+    assert result["title"] == "Grocaroo"
     assert result["data"][CONF_URL] == TEST_BASE_URL
     assert result["data"][CONF_APP_TOKEN] == TEST_APP_TOKEN
     entry = hass.config_entries.async_entries(DOMAIN)[0]
     assert entry.state is ConfigEntryState.LOADED
     state = hass.states.get("todo.grocery_app")
     assert state is not None
-    assert state.name == "Grocery App"
+    assert state.name == "Grocaroo"
     assert state.state == "1"
 
     result = await hass.config_entries.flow.async_init(

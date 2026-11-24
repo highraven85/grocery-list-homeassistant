@@ -72,7 +72,7 @@ h2 { font-family:var(--display); font-weight:560; font-size:1.35rem; margin:0; }
 `;
 
 class GroceryAppCard extends HTMLElement {
-  static getStubConfig() { return { title: "Grocery App", todo_entity: "todo.grocery_app", calendar_entity: "calendar.grocery_dinners" }; }
+  static getStubConfig() { return { title: "Grocaroo", todo_entity: "todo.grocery_app", calendar_entity: "calendar.grocery_dinners" }; }
   static getConfigForm() {
     return { schema: [
       { name: "title", selector: { text: {} } },
@@ -82,7 +82,7 @@ class GroceryAppCard extends HTMLElement {
   }
 
   setConfig(config) {
-    this._config = { title: "Grocery App", todo_entity: "todo.grocery_app", calendar_entity: "calendar.grocery_dinners", ...(config || {}) };
+    this._config = { title: "Grocaroo", todo_entity: "todo.grocery_app", calendar_entity: "calendar.grocery_dinners", ...(config || {}) };
     this._items = this._items || null;
     this._week = this._week || mondayOf(new Date());
     this._expanded = this._expanded || new Set([iso(new Date())]);
@@ -288,6 +288,6 @@ class GroceryAppCard extends HTMLElement {
 if (!customElements.get("grocery-app-card")) {
   customElements.define("grocery-app-card", GroceryAppCard);
   window.customCards = window.customCards || [];
-  window.customCards.push({ type: "grocery-app-card", name: "Grocery App", description: "Shopping list by department and this week's dinners.", preview: false, documentationURL: "https://github.com/highraven85/grocery-list-homeassistant" });
+  window.customCards.push({ type: "grocery-app-card", name: "Grocaroo", description: "Shopping list by department and this week's dinners.", preview: false, documentationURL: "https://github.com/highraven85/grocery-list-homeassistant" });
   console.info(`%c GROCERY-APP-CARD %c ${CARD_VERSION} `, "background:#1c6b45;color:#fff;border-radius:4px 0 0 4px", "background:#f6f1e6;color:#241c14;border-radius:0 4px 4px 0");
 }
