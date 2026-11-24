@@ -37,7 +37,7 @@ async def test_list_exposes_items_and_open_count(
 
     state = hass.states.get("todo.grocery_app")
     assert state is not None
-    assert state.name == "Grocery App"
+    assert state.name == "Grocaroo"
     assert state.state == "1"
     entity = hass.data[DATA_COMPONENT].get_entity("todo.grocery_app")
     assert entity is not None

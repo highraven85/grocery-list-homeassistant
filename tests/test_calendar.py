@@ -12,7 +12,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
-from custom_components.grocery_app.api import MealRecipe, PlannedMeal
+from custom_components.grocery_app.api import MealRecipe, PlannedMeal, _parse_meal
 from custom_components.grocery_app.calendar import dinner_events
 
 from .common import (
@@ -58,7 +58,57 @@ def _meal_calls(aioclient_mock: AiohttpClientMocker) -> list[tuple]:
     return [c for c in aioclient_mock.mock_calls if c[1].path == "/api/ha/meals"]
 
 
+def test_parse_meal_optional_prep_and_equipment() -> None:
+    """Optional prep_spoken, equipment_line, and equipment may be missing or null."""
+    meal = _parse_meal(
+        {
+            "date": "2026-11-24",
+            "meal": "dinner",
+            "recipes": [
+                {
+                    "id": "1",
+                    "name": "Tacos",
+                    "prep_spoken": "Start the slow cooker by 8 AM.",
+                    "equipment": ["Sheet pan"],
+                }
+            ],
+            "equipment_line": "Equipment: Sheet pan",
+            "equipment": ["Sheet pan", "Sheet pan", 1, ""],
+        },
+        0,
+    )
+    assert meal is not None
+    assert meal.equipment_line == "Equipment: Sheet pan"
+    assert meal.equipment == ("Sheet pan",)
+    assert meal.recipes[0].prep_spoken == "Start the slow cooker by 8 AM."
+
+    meal = _parse_meal(
+        {
+            "date": "2026-11-24",
+            "meal": "dinner",
+            "recipes": [{"name": "Soup", "prep_spoken": None}],
+            "equipment_line": None,
+            "equipment": None,
+        },
+        0,
+    )
+    assert meal is not None
+    assert meal.equipment_line is None
+    assert meal.equipment == ()
+    assert meal.recipes[0].prep_spoken is None
+
+    meal = _parse_meal(
+        {"date": "2026-11-24", "meal": "dinner", "recipes": [{"name": "Soup"}]},
+        0,
+    )
+    assert meal is not None
+    assert meal.equipment_line is None
+    assert meal.equipment == ()
+    assert meal.recipes[0].prep_spoken is None
+
+
 def test_dinner_events_filter_merge_and_skip() -> None:
+
     """Only dinner slots become events; empty days skip; same-day dinners merge."""
     day = date(2026, 11, 23)
     events = dinner_events(
@@ -80,6 +130,89 @@ def test_dinner_events_filter_merge_and_skip() -> None:
     assert event.all_day
 
 
+def test_dinner_events_append_prep_and_equipment_lines() -> None:
+    """Non-bullet prep_spoken and equipment_line lines follow the recipe bullets."""
+    day = date(2026, 11, 24)
+    events = dinner_events(
+        [
+            PlannedMeal(
+                day,
+                "dinner",
+                (
+                    MealRecipe(
+                        "1",
+                        "Chicken Tacos",
+                        prep_spoken="Start the slow cooker by 8 AM.",
+                    ),
+                    MealRecipe("2", "Rice"),
+                ),
+                equipment_line="Equipment: Rice cooker, Sheet pan",
+            )
+        ]
+    )
+    assert events[0].description == (
+        "• Chicken Tacos\n"
+        "• Rice\n"
+        "Start the slow cooker by 8 AM.\n"
+        "Equipment: Rice cooker, Sheet pan"
+    )
+
+
+def test_dinner_events_tolerate_missing_optional_lines() -> None:
+    """Missing or null prep and equipment fields leave only the recipe bullets."""
+    day = date(2026, 11, 24)
+    events = dinner_events(
+        [
+            PlannedMeal(
+                day,
+                "dinner",
+                (
+                    MealRecipe("1", "Soup", prep_spoken=None),
+                    MealRecipe("2", "Bread"),
+                ),
+                equipment_line=None,
+            )
+        ]
+    )
+    assert events[0].description == "• Soup\n• Bread"
+
+
+def test_dinner_events_merge_unique_equipment_lines() -> None:
+    """Same-day dinners keep one copy of each equipment line, in meal order."""
+    day = date(2026, 11, 24)
+    events = dinner_events(
+        [
+            PlannedMeal(
+                day,
+                "dinner",
+                (MealRecipe("1", "Tacos", prep_spoken="Warm the tortillas."),),
+                equipment_line="Equipment: Sheet pan",
+            ),
+            PlannedMeal(
+                day,
+                "dinner",
+                (MealRecipe("2", "Rice"),),
+                equipment_line="Equipment: Rice cooker",
+            ),
+            PlannedMeal(
+                day,
+                "dinner",
+                (MealRecipe("3", "Salsa"),),
+                equipment_line="Equipment: Sheet pan",
+            ),
+        ]
+    )
+    assert events[0].summary == "Tacos + Rice + Salsa"
+    assert events[0].description == (
+        "• Tacos\n"
+        "• Rice\n"
+        "• Salsa\n"
+        "Warm the tortillas.\n"
+        "Equipment: Sheet pan\n"
+        "Equipment: Rice cooker"
+    )
+
+
 async def test_state_shows_tonights_dinner(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
 ) -> None:
@@ -89,7 +222,7 @@ async def test_state_shows_tonights_dinner(
 
     state = hass.states.get(ENTITY)
     assert state is not None
-    assert state.name == "Grocery Dinners"
+    assert state.name == "Grocaroo Dinners"
     assert state.state == STATE_ON
     assert state.attributes["message"] == "Chicken Tacos + Mexican Rice"
     assert state.attributes["all_day"] is True

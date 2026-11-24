@@ -39,8 +39,44 @@ def dinners_by_day(meals: Iterable[PlannedMeal]) -> dict[date, list[MealRecipe]]
     return {day: by_day[day] for day in sorted(by_day) if by_day[day]}
 
 
+def dinner_description(
+    recipes: Iterable[MealRecipe], equipment_lines: Iterable[str]
+) -> str:
+    """Build the event description: recipe bullets, then optional spoken lines.
+
+    Each recipe with a non-empty ``prep_spoken`` is appended verbatim after the
+    bullets, then each per-meal ``equipment_line``. These extra lines have no
+    leading bullet so the morning briefing can speak them as-is.
+    """
+    recipes = list(recipes)
+    lines = [f"• {recipe.name}" for recipe in recipes]
+    for recipe in recipes:
+        if recipe.prep_spoken:
+            lines.append(recipe.prep_spoken)
+    seen: set[str] = set()
+    for line in equipment_lines:
+        if line and line not in seen:
+            seen.add(line)
+            lines.append(line)
+    return "\n".join(lines)
+
+
+def dinner_equipment_lines(
+    meals: Iterable[PlannedMeal], day: date
+) -> list[str]:
+    """Return that day's dinner ``equipment_line`` values, in meal order."""
+    lines: list[str] = []
+    for meal in meals:
+        if meal.date != day or meal.meal.casefold() != DINNER_MEAL:
+            continue
+        if meal.equipment_line:
+            lines.append(meal.equipment_line)
+    return lines
+
+
 def dinner_events(meals: Iterable[PlannedMeal]) -> list[CalendarEvent]:
     """Build one all-day event per day that has dinner recipes."""
+    meals = list(meals)
     events = []
     for day, recipes in dinners_by_day(meals).items():
         names = [recipe.name for recipe in recipes]
@@ -49,7 +85,9 @@ def dinner_events(meals: Iterable[PlannedMeal]) -> list[CalendarEvent]:
                 start=day,
                 end=day + timedelta(days=1),
                 summary=SUMMARY_SEPARATOR.join(names),
-                description="\n".join(f"• {name}" for name in names),
+                description=dinner_description(
+                    recipes, dinner_equipment_lines(meals, day)
+                ),
                 uid=f"grocery_app_dinner_{day.isoformat()}",
             )
         )

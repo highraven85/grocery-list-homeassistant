@@ -102,6 +102,7 @@ class MealRecipe:
     id: str
     name: str
     photo_url: str | None = None
+    prep_spoken: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,6 +112,8 @@ class PlannedMeal:
     date: date
     meal: str
     recipes: tuple[MealRecipe, ...]
+    equipment_line: str | None = None
+    equipment: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -192,6 +195,29 @@ def _clean_text(value: Any, limit: int = 80) -> str | None:
     return cleaned or None
 
 
+def _optional_line(value: Any) -> str | None:
+    """Return a non-empty string as given, or None if missing or blank."""
+    if not isinstance(value, str):
+        return None
+    return value if value.strip() else None
+
+
+def _string_list(value: Any) -> tuple[str, ...]:
+    """Return unique non-empty strings from a list, in order."""
+    if not isinstance(value, list):
+        return ()
+    items: list[str] = []
+    seen: set[str] = set()
+    for raw in value:
+        if not isinstance(raw, str):
+            continue
+        item = raw.strip()
+        if item and item not in seen:
+            seen.add(item)
+            items.append(item)
+    return tuple(items)
+
+
 def _parse_recipe(raw: Any) -> MealRecipe | None:
     """Convert one recipe from a meal, or skip it when it has no name."""
     if not isinstance(raw, dict):
@@ -207,7 +233,12 @@ def _parse_recipe(raw: Any) -> MealRecipe | None:
     photo_url = raw.get("photo_url")
     if not isinstance(photo_url, str) or not photo_url.strip():
         photo_url = None
-    return MealRecipe(id=recipe_id.strip(), name=name.strip(), photo_url=photo_url)
+    return MealRecipe(
+        id=recipe_id.strip(),
+        name=name.strip(),
+        photo_url=photo_url,
+        prep_spoken=_optional_line(raw.get("prep_spoken")),
+    )
 
 
 def _parse_meal(raw: Any, index: int) -> PlannedMeal | None:
@@ -233,7 +264,13 @@ def _parse_meal(raw: Any, index: int) -> PlannedMeal | None:
     parsed = tuple(
         recipe for raw_recipe in recipes if (recipe := _parse_recipe(raw_recipe))
     )
-    return PlannedMeal(date=day, meal=meal.strip(), recipes=parsed)
+    return PlannedMeal(
+        date=day,
+        meal=meal.strip(),
+        recipes=parsed,
+        equipment_line=_optional_line(raw.get("equipment_line")),
+        equipment=_string_list(raw.get("equipment")),
+    )
 
 
 class GroceryAppClient:
