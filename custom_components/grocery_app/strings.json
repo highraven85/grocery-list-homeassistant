@@ -2,7 +2,7 @@
   "config": {
     "step": {
       "user": {
-        "title": "Grocery App",
+        "title": "Grocaroo",
         "description": "Connect a grocery list. Credentials are stored in this config entry and sent only as request headers.",
         "data": {
           "url": "Base URL",
@@ -11,15 +11,15 @@
           "app_token": "App API token"
         },
         "data_description": {
-          "url": "Origin of the grocery app, such as https://example.com. Do not include a username, password, or query string. The integration appends /api/ha to this URL.",
+          "url": "Origin of Grocaroo, such as https://example.com. Do not include a username, password, or query string. The integration appends /api/ha to this URL.",
           "access_client_id": "Cloudflare Access service token client ID. Sent as the CF-Access-Client-Id header.",
           "access_client_secret": "Cloudflare Access service token client secret. Sent as the CF-Access-Client-Secret header.",
-          "app_token": "Grocery app API token. Sent as an Authorization Bearer header, never in the URL."
+          "app_token": "Grocaroo API token. Sent as an Authorization Bearer header, never in the URL."
         }
       },
       "reauth_confirm": {
-        "title": "Refresh Grocery App credentials",
-        "description": "The grocery app rejected the saved credentials. Enter the Access service token and the app API token again. The base URL is left unchanged.",
+        "title": "Refresh Grocaroo credentials",
+        "description": "Grocaroo rejected the saved credentials. Enter the Access service token and the app API token again. The base URL is left unchanged.",
         "data": {
           "access_client_id": "Access client ID",
           "access_client_secret": "Access client secret",
@@ -28,12 +28,12 @@
         "data_description": {
           "access_client_id": "Cloudflare Access service token client ID. Sent as the CF-Access-Client-Id header.",
           "access_client_secret": "Cloudflare Access service token client secret. Sent as the CF-Access-Client-Secret header.",
-          "app_token": "Grocery app API token. Sent as an Authorization Bearer header, never in the URL."
+          "app_token": "Grocaroo API token. Sent as an Authorization Bearer header, never in the URL."
         }
       },
       "reconfigure": {
-        "title": "Reconfigure Grocery App",
-        "description": "Update the grocery app base URL and credentials. Credentials are sent only as request headers.",
+        "title": "Reconfigure Grocaroo",
+        "description": "Update the Grocaroo base URL and credentials. Credentials are sent only as request headers.",
         "data": {
           "url": "Base URL",
           "access_client_id": "Access client ID",
@@ -41,33 +41,33 @@
           "app_token": "App API token"
         },
         "data_description": {
-          "url": "Origin of the grocery app, such as https://example.com. Do not include a username, password, or query string.",
+          "url": "Origin of Grocaroo, such as https://example.com. Do not include a username, password, or query string.",
           "access_client_id": "Cloudflare Access service token client ID. Sent as the CF-Access-Client-Id header.",
           "access_client_secret": "Cloudflare Access service token client secret. Sent as the CF-Access-Client-Secret header.",
-          "app_token": "Grocery app API token. Sent as an Authorization Bearer header, never in the URL."
+          "app_token": "Grocaroo API token. Sent as an Authorization Bearer header, never in the URL."
         }
       }
     },
     "error": {
-      "cannot_connect": "Could not connect to the grocery app. Check the base URL and try again.",
+      "cannot_connect": "Could not connect to Grocaroo. Check the base URL and try again.",
       "invalid_auth": "Authentication failed. Check the Access client ID, Access client secret, and app API token.",
       "invalid_url": "Enter a base URL that starts with http:// or https:// and does not include a username, password, query string, or fragment.",
-      "invalid_response": "The grocery app did not return a shopping list. Check that the base URL points at the grocery app.",
+      "invalid_response": "Grocaroo did not return a shopping list. Check that the base URL points at Grocaroo.",
       "unknown": "Unexpected error. See the Home Assistant logs."
     },
     "abort": {
-      "already_configured": "Grocery App is already configured."
+      "already_configured": "Grocaroo is already configured."
     }
   },
   "exceptions": {
     "auth_failed": {
-      "message": "Grocery App authentication failed. Update the credentials in Settings."
+      "message": "Grocaroo authentication failed. Update the credentials in Settings."
     },
     "cannot_connect": {
-      "message": "Could not connect to the grocery app."
+      "message": "Could not connect to Grocaroo."
     },
     "request_failed": {
-      "message": "The grocery app request failed."
+      "message": "The Grocaroo request failed."
     },
     "item_name_required": {
       "message": "An item name is required."

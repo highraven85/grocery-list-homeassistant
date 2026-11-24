@@ -1,15 +1,20 @@
 {
   "domain": "grocery_app",
-  "name": "Grocery App",
+  "name": "Grocaroo",
   "codeowners": [],
   "config_flow": true,
-  "dependencies": ["http", "websocket_api"],
-  "after_dependencies": ["frontend"],
+  "dependencies": [
+    "http",
+    "websocket_api"
+  ],
+  "after_dependencies": [
+    "frontend"
+  ],
   "documentation": "https://github.com/highraven85/grocery-list-homeassistant",
   "integration_type": "service",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/highraven85/grocery-list-homeassistant/issues",
   "requirements": [],
   "single_config_entry": true,
-  "version": "1.2.0"
+  "version": "1.3.0"
 }

@@ -6,11 +6,11 @@ from typing import Final
 from homeassistant.const import CONF_URL
 
 DOMAIN: Final = "grocery_app"
-DEFAULT_NAME: Final = "Grocery App"
+DEFAULT_NAME: Final = "Grocaroo"
 ENTITY_UNIQUE_ID: Final = "grocery_app"
 ENTITY_ID: Final = "todo.grocery_app"
 
-DINNERS_NAME: Final = "Grocery Dinners"
+DINNERS_NAME: Final = "Grocaroo Dinners"
 DINNERS_UNIQUE_ID: Final = "grocery_app_dinners"
 DINNERS_ENTITY_ID: Final = "calendar.grocery_dinners"
 DINNER_MEAL: Final = "dinner"
